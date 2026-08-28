@@ -1,0 +1,38 @@
+/**:
+  ros__parameters:
+    use_state_machine: false
+    camera_6mm.enable_DeviceSerialNumber: false
+    camera_6mm.device_serial_number: "DA1564615"
+    camera_6mm.camera_info_url: "package://rm_bringup/config/camera_info.yaml"
+    camera_6mm.camera_name: "camera_6mm"
+    camera_6mm.target_frame: "camera_optical_frame"
+    camera_6mm.ReverseXY: false
+    camera_6mm.enable_frame_rate: true
+    camera_6mm.acquisition_frame_rate: 100.0
+    camera_6mm.exposure_time: 5000.0
+    camera_6mm.gain: 16.9
+    camera_6mm.cvt_quality: 1
+    camera_6mm.pixel_format: "BayerRG8"
+    camera_6mm.adc_bit_depth: "ADCBitDepth_8"
+    camera_6mm.enable_opencv: true
+    camera_6mm.switch_to_8mm_distance: 3.7
+    camera_6mm.switch_to_6mm_distance: 1.0
+
+    camera_8mm.enable_DeviceSerialNumber: false
+    camera_8mm.device_serial_number: "DA4845980"
+    camera_8mm.camera_info_url: "package://rm_bringup/config/camera_info_copy.yaml"
+    camera_8mm.camera_name: "camera_8mm"
+    camera_8mm.target_frame: "camera_optical_frame2"
+    camera_8mm.ReverseXY: false
+    camera_8mm.enable_frame_rate: false
+    camera_8mm.acquisition_frame_rate: 200.0
+    camera_8mm.exposure_time: 1000.0
+    camera_8mm.gain: 1.0
+    camera_8mm.cvt_quality: 1
+    camera_8mm.pixel_format: "BayerRG8"
+    camera_8mm.adc_bit_depth: "ADCBitDepth_8"
+    camera_8mm.enable_opencv: false
+    camera_8mm.switch_to_8mm_distance: 0.5
+    camera_8mm.switch_to_6mm_distance: 3.0
+
+
