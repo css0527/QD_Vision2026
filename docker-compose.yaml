@@ -35,7 +35,7 @@ services:
     - /tmp/.X11-unix:/tmp/.X11-unix:rw
     - /dev:/dev
     - ${HOME}/.ros:/root/.ros
-    - /home/scurm/QD_Vision2026:/ros_ws
+    - /home/scurm/css/QD_Vision2026:/ros_ws
     - ${HOME}/.vscode-server/:/root/.vscode-server
 
     # 启动命令 (对应最后那一串)

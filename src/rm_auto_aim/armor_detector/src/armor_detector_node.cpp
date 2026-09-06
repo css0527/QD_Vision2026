@@ -481,10 +481,24 @@ std::unique_ptr<Yolov5Detector> ArmorDetectorNode::initYoloDetector() {
             this->declare_parameter("ignore_classes", std::vector<std::string> { "negative" })
     };
 
-    auto detector =
-        std::make_unique<Yolov5Detector>(xml_path, bin_path, device, EnemyColor::RED, y_params);
-
-    return detector;
+    // 优先使用配置的设备（如 GPU），编译失败则自动回退到 CPU，保证不因无 GPU 而崩溃
+    try {
+        auto detector =
+            std::make_unique<Yolov5Detector>(xml_path, bin_path, device, EnemyColor::RED, y_params);
+        FYT_INFO("armor_detector", "YOLOv5 detector running on device: {}", device);
+        return detector;
+    } catch (const std::exception& e) {
+        FYT_WARN(
+            "armor_detector",
+            "Failed to load YOLOv5 on device '{}': {}. Falling back to CPU.",
+            device,
+            e.what()
+        );
+        auto detector =
+            std::make_unique<Yolov5Detector>(xml_path, bin_path, "CPU", EnemyColor::RED, y_params);
+        FYT_INFO("armor_detector", "YOLOv5 detector running on device: CPU");
+        return detector;
+    }
 }
 
 /**
@@ -632,6 +646,7 @@ void ArmorDetectorNode::createDebugPublishers() noexcept {
     this->declare_parameter("armor_detector.binary_img.jpeg_quality", 50);
     binary_img_pub_ = image_transport::create_publisher(this, "armor_detector/binary_img");
     number_img_pub_ = image_transport::create_publisher(this, "armor_detector/number_img");
+    result_img_pub_ = image_transport::create_publisher(this, "armor_detector/result_img");
 }
 
 void ArmorDetectorNode::destroyDebugPublishers() noexcept {
@@ -640,6 +655,7 @@ void ArmorDetectorNode::destroyDebugPublishers() noexcept {
 
     binary_img_pub_.shutdown();
     number_img_pub_.shutdown();
+    result_img_pub_.shutdown();
 }
 
 void ArmorDetectorNode::publishMarkers(

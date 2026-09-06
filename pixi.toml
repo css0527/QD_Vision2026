@@ -24,6 +24,16 @@ colcon build --symlink-install --parallel-workers 4 \
 scripts = ["install/setup.sh"]
 
 [dependencies]
+ros-humble-ament-cmake = "*"
+ros-humble-ament-cmake-auto = "*"
+ros-humble-ament-cmake-python = "*"
+ros-humble-ament-package = "*"
+ros-humble-rosidl-cmake = "*"
+ros-humble-rosidl-generator-c = "*"
+ros-humble-rosidl-generator-cpp = "*"
+ros-humble-rosidl-generator-py = "*"
+ros-humble-python-cmake-module = "*"
+
 ros-humble-desktop = ">=0.10.0,<0.11"
 ros-humble-foxglove-bridge = ">=3.3.0,<4"
 colcon-common-extensions = ">=0.3.0,<0.4"
@@ -61,3 +71,8 @@ tbb = ">=2022.3.0,<2023"
 opencv = ">=4.13.0,<5"
 eigen = ">=3.4.0,<4"
 fmt = ">=12.1.0,<13"
+gflags = "2.2.2.*"
+ros-humble-rclpy = ">=3.3.21,<4"
+ros-humble-ros2cli = ">=0.18.18,<0.19"
+ros-humble-launch = ">=1.0.14,<2"
+ros-humble-launch-ros = ">=0.19.13,<0.20"

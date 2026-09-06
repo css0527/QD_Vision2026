@@ -156,6 +156,7 @@ private:
     rclcpp::Publisher<rm_interfaces::msg::DebugArmors>::SharedPtr armors_data_pub_;
     image_transport::Publisher binary_img_pub_;
     image_transport::Publisher number_img_pub_;
+    image_transport::Publisher result_img_pub_;
 
     // 相机内参发布
     sensor_msgs::msg::CameraInfo camera_info_msg;

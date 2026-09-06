@@ -2,7 +2,7 @@
   ros__parameters:
     use_state_machine: false
     camera_6mm.enable_DeviceSerialNumber: false
-    camera_6mm.device_serial_number: "DA1564615"
+    camera_6mm.device_serial_number: "DA6962119"
     camera_6mm.camera_info_url: "package://rm_bringup/config/camera_info.yaml"
     camera_6mm.camera_name: "camera_6mm"
     camera_6mm.target_frame: "camera_optical_frame"

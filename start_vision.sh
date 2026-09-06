@@ -3,14 +3,17 @@
 
 echo "=== QD Vision 2026 启动脚本 ==="
 
-# 1. 进入工作空间
-cd ~/QD_Vision2026
+# 1. 进入工作空间（脚本所在目录）
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+cd "$SCRIPT_DIR"
 
 # 2. 设置环境变量
 echo "设置环境变量..."
-export LD_LIBRARY_PATH=/home/scurm/QD_Vision2026/.pixi/envs/default/lib:/home/scurm/QD_Vision2026/src/rm_utils/hikSDK/lib/amd64:$LD_LIBRARY_PATH
-export LD_PRELOAD=/home/scurm/QD_Vision2026/.pixi/envs/default/lib/libstdc++.so.6
-export PATH=/home/scurm/QD_Vision2026/.pixi/envs/default/bin:$PATH
+export LD_LIBRARY_PATH="$SCRIPT_DIR/.pixi/envs/default/lib:$SCRIPT_DIR/src/rm_utils/hikSDK/lib/amd64:$LD_LIBRARY_PATH"
+export LD_PRELOAD="$SCRIPT_DIR/.pixi/envs/default/lib/libstdc++.so.6"
+export PATH="$SCRIPT_DIR/.pixi/envs/default/bin:$PATH"
+# 让 OpenVINO GPU 插件能找到系统 OpenCL ICD（核显加速）
+export OCL_ICD_VENDORS="/etc/OpenCL/vendors"
 
 # 3. 确保相机权限
 echo "检查相机权限..."

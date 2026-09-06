@@ -2,6 +2,7 @@
 #include <rcl_interfaces/msg/parameter_descriptor.hpp>
 #include <rclcpp/rclcpp.hpp>
 #include <rclcpp/utilities.hpp>
+#include <image_transport/image_transport.hpp>
 #include <sensor_msgs/image_encodings.hpp>
 #include <sensor_msgs/msg/camera_info.hpp>
 #include <sensor_msgs/msg/image.hpp>
@@ -33,7 +34,9 @@ public:
 
     bool use_sensor_data_qos = this->declare_parameter("use_sensor_data_qos", true);
     auto qos = use_sensor_data_qos ? rclcpp::SensorDataQoS() : rclcpp::QoS(rclcpp::KeepLast(10));
-    image_pub_ = this->create_publisher<sensor_msgs::msg::Image>("image_raw", qos);
+    // 用 image_transport 发布，自动生成 /image_raw/compressed (JPEG) 主题，
+    // 供可视化工具低带宽查看，避免原始 RGB 大图在高帧率下导致画面卡顿。
+    image_pub_ = image_transport::create_publisher(this, "image_raw", qos.get_rmw_qos_profile());
     camera_info_pub_ = this->create_publisher<sensor_msgs::msg::CameraInfo>("camera_info", qos);
 
     state_machine_.initialize(this);
@@ -107,7 +110,7 @@ private:
 
     cv::Mat publish_image = image.isContinuous() ? image : image.clone();
 
-    auto image_msg = std::make_unique<sensor_msgs::msg::Image>();
+    auto image_msg = std::make_shared<sensor_msgs::msg::Image>();
     image_msg->header = camera_info.header;
     image_msg->encoding = sensor_msgs::image_encodings::RGB8;
     image_msg->height = static_cast<uint32_t>(publish_image.rows);
@@ -116,7 +119,7 @@ private:
       publish_image.cols * publish_image.elemSize());
     image_msg->data.assign(publish_image.datastart, publish_image.dataend);
 
-    image_pub_->publish(std::move(image_msg));
+    image_pub_.publish(image_msg);
     camera_info_pub_->publish(std::make_unique<sensor_msgs::msg::CameraInfo>(std::move(camera_info)));
   }
 
@@ -144,7 +147,7 @@ private:
     return result;
   }
 
-  rclcpp::Publisher<sensor_msgs::msg::Image>::SharedPtr image_pub_;
+  image_transport::Publisher image_pub_;
   rclcpp::Publisher<sensor_msgs::msg::CameraInfo>::SharedPtr camera_info_pub_;
   qd::utils::VisionStateMachine & state_machine_;
 

@@ -15,17 +15,24 @@ sys.path.append(os.path.join(get_package_share_directory('rm_bringup'), 'launch'
 
 def generate_launch_description():
 
+    # 工作空间根目录：install/<pkg>/share/<pkg> 向上 4 级
+    workspace_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(
+        get_package_share_directory('rm_bringup')))))
+    pixi_lib = os.path.join(workspace_root, '.pixi', 'envs', 'default', 'lib')
+    hik_sdk_lib = os.path.join(workspace_root, 'src', 'rm_utils', 'hikSDK', 'lib', 'amd64')
+
     old_ld_library_path = os.environ.get('LD_LIBRARY_PATH', '')
-    os.environ['LD_LIBRARY_PATH'] = (
-        '/home/scurm/QD_Vision2026/.pixi/envs/default/lib:'
-        '/home/scurm/QD_Vision2026/src/rm_utils/hikSDK/lib/amd64:'
-        + old_ld_library_path
-    )
+    os.environ['LD_LIBRARY_PATH'] = pixi_lib + ':' + hik_sdk_lib + ':' + old_ld_library_path
+
     old_ld_preload = os.environ.get('LD_PRELOAD', '')
     os.environ['LD_PRELOAD'] = (
-        '/home/scurm/QD_Vision2026/.pixi/envs/default/lib/libstdc++.so.6'
+        os.path.join(pixi_lib, 'libstdc++.so.6')
         + (':' + old_ld_preload if old_ld_preload else '')
     )
+
+    # 让 OpenVINO GPU 插件能找到系统的 Intel OpenCL ICD：
+    # conda 环境的 ocl-icd 默认只搜 $CONDA_PREFIX/etc/OpenCL/vendors，找不到 /etc/OpenCL/vendors。
+    os.environ['OCL_ICD_VENDORS'] = '/etc/OpenCL/vendors'
 
     # 载入参数
     launch_params = yaml.safe_load(open(os.path.join(
@@ -58,10 +65,9 @@ def generate_launch_description():
         ' xyz:=', launch_params['gimbal2camera']['xyz'], ' rpy:=', launch_params['gimbal2camera']['rpy'],
         ' xyz_:=', launch_params['gimbal2camera']['xyz_'], ' rpy_:=', launch_params['gimbal2camera']['rpy_']
     ])
-    
     composable_nodes.append(ComposableNode(
         package='robot_state_publisher',
-        plugin='robot_state_publisher::RobotStatePublisher', # 官方组件类名
+        plugin='robot_state_publisher::RobotStatePublisher',
         name='robot_state_publisher',
         parameters=[{'robot_description': ParameterValue(robot_gimbal_description, value_type=str),
                     'publish_frequency': 1000.0}]
@@ -144,6 +150,9 @@ def generate_launch_description():
             plugin='qd::auto_aim::ArmorSolverNode',
             name='armor_solver',
             parameters=[get_params('armor_solver')],
+            remappings=[
+                ('/camera_info', '/camera_driver/camera_info'),
+            ],
             extra_arguments=[{'use_intra_process_comms': True}]
         ))
     else:
@@ -153,6 +162,9 @@ def generate_launch_description():
             name='armor_solver',
             namespace=node_namespace,
             parameters=[get_params('armor_solver')],
+            remappings=[
+                ('/camera_info', '/camera_driver/camera_info'),
+            ],
             extra_arguments=[{'use_intra_process_comms': True}]
         ))
 

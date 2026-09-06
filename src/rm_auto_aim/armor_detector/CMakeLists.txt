@@ -27,6 +27,7 @@ find_package(OpenCV REQUIRED)
 find_package(TBB REQUIRED COMPONENTS tbb)
 find_package(fmt REQUIRED)
 find_package(OpenVINO REQUIRED COMPONENTS Runtime)
+find_package(gflags REQUIRED)
 # find_package(G2O REQUIRED)
 # find_package(Sophus REQUIRED)
 
