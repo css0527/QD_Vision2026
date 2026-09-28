@@ -47,10 +47,23 @@ void SerialDriverNode::init() {
     std::string port_name = this->declare_parameter("port_name", "/dev/ttyUSB0");
     std::string protocol_type = this->declare_parameter("protocol", "infantry");
     bool enable_data_print = this->declare_parameter("enable_data_print", false);
-    int baud_rate = this->declare_parameter("baud_rate", 115200);
-    // Create Protocol
-    protocol_ =
-        ProtocolFactory::createProtocol(protocol_type, port_name, baud_rate, enable_data_print);
+    int baud_rate = this->declare_parameter("baud_rate", 921600);
+    const auto crc_profile_name = this->declare_parameter("crc_profile", "crc8_31_modbus");
+    protocol::PitchCalibration pitch_calibration;
+    pitch_calibration.horizontal_rad = this->declare_parameter("pitch_horizontal_rad", 0.58);
+    pitch_calibration.up_sign = this->declare_parameter("pitch_up_sign", -1.0);
+    pitch_calibration.min_rad = this->declare_parameter("pitch_min_rad", 0.4);
+    pitch_calibration.max_rad = this->declare_parameter("pitch_max_rad", 0.75);
+    try {
+        const auto crc_profile = FloatFrame::parse_crc_profile(crc_profile_name);
+        protocol_ = ProtocolFactory::createProtocol(
+            protocol_type, port_name, baud_rate, enable_data_print, crc_profile, pitch_calibration
+        );
+    } catch (const std::invalid_argument& error) {
+        FYT_FATAL("serial_driver", "{}", error.what());
+        rclcpp::shutdown();
+        return;
+    }
     if (protocol_ == nullptr) {
         FYT_FATAL("serial_driver", "Failed to create protocol with type: {}", protocol_type);
         rclcpp::shutdown();
@@ -58,9 +71,20 @@ void SerialDriverNode::init() {
     }
     FYT_INFO(
         "serial_driver",
-        "Protocol has been created with type: {}, port: {}",
+        "Protocol type: {}, port: {}, baud: {}, CRC: {}",
         protocol_type,
-        port_name
+        port_name,
+        baud_rate,
+        crc_profile_name
+    );
+
+    FYT_INFO(
+        "serial_driver",
+        "Pitch calibration: horizontal={} rad, up_sign={}, limits=[{}, {}] rad",
+        pitch_calibration.horizontal_rad,
+        pitch_calibration.up_sign,
+        pitch_calibration.min_rad,
+        pitch_calibration.max_rad
     );
 
     // Subscriptions
@@ -164,6 +188,7 @@ void SerialDriverNode::listenLoop() {
             t.header.frame_id = target_frame_;
             t.child_frame_id = child_frame_id_;
             auto roll = receive_data.roll * M_PI / 180.0;
+            // ROS 消息的仰角向上为正；TF 绕 +Y 的正转向下，因此此处取反。
             auto pitch = -receive_data.pitch * M_PI / 180.0;
             auto yaw = receive_data.yaw * M_PI / 180.0;
             tf2::Quaternion q;
@@ -185,6 +210,9 @@ void SerialDriverNode::listenLoop() {
 
             heartbeat_->publish();
         } else {
+            if (!rclcpp::ok()) {
+                break;
+            }
             auto error_message = protocol_->getErrorMessage();
             error_message = error_message.empty() ? "unknown" : error_message;
             FYT_WARN("serial_driver", "Failed to reveive packet! error message :{}", error_message);

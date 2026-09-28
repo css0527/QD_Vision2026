@@ -45,6 +45,10 @@ public:
       throw std::invalid_argument("transporter is nullptr");
     }
     FYT_REGISTER_LOGGER("serial_driver", "qd2026-log", INFO);
+    // 首次读写前打开设备，避免对初始的无效文件描述符执行 I/O。
+    if (!transporter_->isOpen() && !transporter_->open()) {
+      FYT_ERROR("serial_driver", "Failed to open transporter: {}", transporter_->errorMessage());
+    }
   }
 
   ~FixedPacketTool() { enbaleRealtimeSend(false); }
@@ -66,7 +70,7 @@ private:
   // data
   uint8_t tmp_buffer_[capacity];       // NOLINT
   uint8_t recv_buffer_[capacity * 2];  // NOLINT
-  int recv_buf_len_;
+  int recv_buf_len_{0};
   // for realtime sending
   bool use_realtime_send_{false};
   bool use_data_print_{false};
@@ -95,7 +99,7 @@ bool FixedPacketTool<capacity>::simpleSendPacket(const FixedPacket<capacity> &pa
     return true;
   } else {
     // reconnect
-    FYT_ERROR("serial_driver", "transporter_->write() failed");
+    FYT_ERROR("serial_driver", "transporter_->write() failed: {}", transporter_->errorMessage());
     transporter_->close();
     transporter_->open();
     return false;
@@ -194,7 +198,7 @@ bool FixedPacketTool<capacity>::recvPacket(FixedPacket<capacity> &packet) {
       return false;
     }
   } else {
-    FYT_ERROR("serial_driver", "transporter_->read() failed");
+    FYT_ERROR("serial_driver", "transporter_->read() failed: {}", transporter_->errorMessage());
     // reconnect
     transporter_->close();
     transporter_->open();

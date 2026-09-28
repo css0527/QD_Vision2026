@@ -12,13 +12,15 @@ HikCamera::HikCamera(const Parameters& params): queue_(1), camera_handle_(nullpt
 
 HikCamera::~HikCamera() {
     running_ = false;
+    // 等待采集线程结束，避免在线程仍访问句柄时释放设备。
+    if (daemon_thread_.joinable()) {
+        daemon_thread_.join();
+    }
     if (camera_handle_ != nullptr) {
         MV_CC_StopGrabbing(camera_handle_);
         MV_CC_CloseDevice(camera_handle_);
-        MV_CC_DestroyHandle(&camera_handle_);
-    }
-    if (daemon_thread_.joinable()) {
-        daemon_thread_.join();
+        MV_CC_DestroyHandle(camera_handle_);
+        camera_handle_ = nullptr;
     }
 }
 
@@ -155,7 +157,7 @@ void* HikCamera::get_camera_handle(const Parameters& params) {
         nRet = MV_CC_OpenDevice(probe_handle);
         if (nRet != MV_OK) {
             printf("OpenDevice failed! nRet [0x%x]\n", nRet);
-            MV_CC_DestroyHandle(&probe_handle);
+            MV_CC_DestroyHandle(probe_handle);
             continue;
         }
 
@@ -163,7 +165,7 @@ void* HikCamera::get_camera_handle(const Parameters& params) {
             device_info = device;
             matched = true;
             MV_CC_CloseDevice(probe_handle);
-            MV_CC_DestroyHandle(&probe_handle);
+            MV_CC_DestroyHandle(probe_handle);
             break;
         }
 
@@ -172,7 +174,7 @@ void* HikCamera::get_camera_handle(const Parameters& params) {
         std::cout << "Found DeviceSerialNumber: " << string_value.chCurValue << std::endl;
 
         MV_CC_CloseDevice(probe_handle);
-        MV_CC_DestroyHandle(&probe_handle);
+        MV_CC_DestroyHandle(probe_handle);
 
         // 比较序列号
         if (std::string(string_value.chCurValue) == params.device_serial_number) {
@@ -198,7 +200,7 @@ void* HikCamera::get_camera_handle(const Parameters& params) {
     nRet = MV_CC_OpenDevice(handle);
     printf("MV_CC_OpenDevice! nRet [0x%x]\n", nRet);
     if (nRet != MV_OK) {
-        MV_CC_DestroyHandle(&handle);
+        MV_CC_DestroyHandle(handle);
         return nullptr;
     }
     MV_CC_GetStringValue(handle, "DeviceSerialNumber", &string_value);

@@ -3,8 +3,13 @@
     target_frame: odom
     child_frame_id: gimbal_link
     timestamp_offset: 0.000
-    port_name: "/dev/ttyUSB0 "
+    port_name: "/dev/ttyACM0"
     baud_rate: 115200  # 波特率 921600, 115200, 19200, 9600, 4800, 2400, 1200, 300
-    protocol: "hero"  # ProtocolInfantry: infantry , DefaultProtocol: hero air , ProtocolSentry: sentry
-    enable_data_print: false # 改为true将会打印从串口读出来的16进制数据
+    protocol: "hero"  # hero、air、infantry、sentry 均使用 Seasky 浮点帧
+    crc_profile: "crc8_31_modbus"  # 与实板抓包一致；旧样例可选 robomaster
+    pitch_horizontal_rad: 0.58 # 云台水平时电控的绝对 pitch
+    pitch_up_sign: -1.0 # 向上抬头时电控 pitch 减小
+    pitch_min_rad: 0.4 # 抬头极限
+    pitch_max_rad: 0.75 # 低头极限
+    enable_data_print: true # 每秒打印一次接收姿态和实际写出的角度
 

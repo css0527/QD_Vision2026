@@ -38,7 +38,7 @@ bool UartTransporter::setParam(int speed, int flow_ctrl, int databits, int stopb
   // tcgetattr(fd,&options)得到与fd指向对象的相关参数，并将它们保存于options,该函数还可以测试配置是否正确，
   // 该串口是否可用等。若调用成功，函数返回值为0，若调用失败，函数返回值为1.
   if (tcgetattr(fd_, &options) != 0) {
-    error_message_ = "Setup Serial err";
+    error_message_ = "tcgetattr failed for " + device_path_ + ": " + strerror(errno);
     return false;
   }
   // 设置串口输入波特率和输出波特率
@@ -131,13 +131,13 @@ bool UartTransporter::setParam(int speed, int flow_ctrl, int databits, int stopb
   options.c_iflag &= ~(BRKINT | ICRNL | INPCK | ISTRIP | IXON);
 
   // 设置等待时间和最小接收字符
-  options.c_cc[VTIME] = 1;  // 读取一个字符等待1*(1/10)s
-  options.c_cc[VMIN] = 1;   // 读取字符的最少个数为1
+  options.c_cc[VTIME] = 1;  // 无数据时每 100 ms 返回，便于 ROS 关闭接收线程
+  options.c_cc[VMIN] = 0;   // 串口接收允许超时返回 0 字节
   tcflush(fd_, TCIFLUSH);
 
   // 激活配置 (将修改后的termios数据设置到串口中）
   if (tcsetattr(fd_, TCSANOW, &options) != 0) {
-    error_message_ = "com set error";
+    error_message_ = "tcsetattr failed for " + device_path_ + ": " + strerror(errno);
     return false;
   }
   return true;
@@ -149,12 +149,14 @@ bool UartTransporter::open() {
   }
   fd_ = ::open(device_path_.c_str(), O_RDWR | O_NOCTTY | O_NDELAY);
   if (-1 == fd_) {
-    error_message_ = "can't open uart device: " + device_path_;
+    error_message_ = "cannot open " + device_path_ + ": " + strerror(errno);
     return false;
   }
   // 恢复串口为阻塞状态
   if (fcntl(fd_, F_SETFL, 0) < 0) {
-    error_message_ = "fcntl failed";
+    error_message_ = "fcntl failed for " + device_path_ + ": " + strerror(errno);
+    ::close(fd_);
+    fd_ = -1;
     return false;
   }
   // 测试是否为终端设备
@@ -165,6 +167,8 @@ bool UartTransporter::open() {
   // }
   // 设置串口数据帧格式
   if (!setParam(speed_, flow_ctrl_, databits_, stopbits_, parity_)) {
+    ::close(fd_);
+    fd_ = -1;
     return false;
   }
   is_open_ = true;
@@ -184,12 +188,22 @@ bool UartTransporter::isOpen() { return is_open_; }
 
 int UartTransporter::read(void *buffer, size_t len) {
   int ret = ::read(fd_, buffer, len);
-  // tcflush(fd_, TCIFLUSH);
+  if (ret < 0) {
+    error_message_ = "read failed for " + device_path_ + ": " + strerror(errno);
+  } else if (ret == 0) {
+    error_message_ = "read returned no data from " + device_path_;
+  }
   return ret;
 }
 
 int UartTransporter::write(const void *buffer, size_t len) {
   int ret = ::write(fd_, buffer, len);
+  if (ret < 0) {
+    error_message_ = "write failed for " + device_path_ + ": " + strerror(errno);
+  } else if (static_cast<size_t>(ret) != len) {
+    error_message_ = "short write to " + device_path_ + ": " + std::to_string(ret) + "/"
+        + std::to_string(len) + " bytes";
+  }
   return ret;
 }
 

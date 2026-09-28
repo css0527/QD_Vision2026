@@ -39,6 +39,13 @@ rclcpp_components_register_node(${PROJECT_NAME}
 
 target_include_directories(${PROJECT_NAME}_node PUBLIC include)
 
+# 独立验证工具只依赖帧编解码，不启动视觉或串口 ROS 节点。
+find_package(Threads REQUIRED)
+add_executable(serial_probe tools/serial_probe.cpp src/float_frame.cpp)
+target_include_directories(serial_probe PRIVATE include)
+target_link_libraries(serial_probe Threads::Threads)
+install(TARGETS serial_probe DESTINATION lib/${PROJECT_NAME})
+
 #############
 ## Testing ##
 #############
@@ -55,6 +62,17 @@ if(BUILD_TESTING)
 
   ament_add_gtest(test_fixed_packet_tool test/test_fixed_packet_tool.cpp)
   target_link_libraries(test_fixed_packet_tool ${PROJECT_NAME})
+
+  ament_add_gtest(test_float_frame test/test_float_frame.cpp src/float_frame.cpp)
+  target_include_directories(test_float_frame PRIVATE include)
+
+  ament_add_gtest(test_seasky_protocol test/test_seasky_protocol.cpp)
+  target_link_libraries(test_seasky_protocol ${PROJECT_NAME})
+
+  ament_add_gtest(test_serial_probe test/test_serial_probe.cpp)
+  set_tests_properties(test_serial_probe PROPERTIES
+    ENVIRONMENT "SERIAL_PROBE_EXE=$<TARGET_FILE:serial_probe>"
+  )
 endif()
 
 #############
