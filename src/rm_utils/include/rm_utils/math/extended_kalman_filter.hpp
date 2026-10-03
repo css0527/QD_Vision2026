@@ -98,6 +98,7 @@ public:
     Q = update_Q();
     P_pri = F * P_post * F.transpose() + Q;
     x_post = x_pri;
+    P_post = P_pri;  // 连续无观测预测时，协方差也必须逐帧累积。
 
     return x_pri;
   }

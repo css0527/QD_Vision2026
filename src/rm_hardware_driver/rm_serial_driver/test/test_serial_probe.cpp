@@ -18,15 +18,15 @@
 namespace {
 
 constexpr std::uint8_t EXPECTED_FRAME[] {
-    0xA5, 0x08, 0x00, 0xF4, 0xE1, 0x7A, 0x14, 0x3F, 0x00, 0x00, 0x20, 0xC0, 0xED, 0xA9,
+    0xA5, 0x08, 0x00, 0xF4, 0x1C, 0xED, 0x04, 0x42, 0x00, 0x00, 0x20, 0xC0, 0xAB, 0x27,
 };
 
 constexpr std::uint8_t OTHER_VALID_FRAME[] {
-    0xA5, 0x08, 0x00, 0xF4, 0xCD, 0xCC, 0xCC, 0x3D, 0x00, 0x00, 0x60, 0xC0, 0x62, 0xF7,
+    0xA5, 0x08, 0x00, 0xF4, 0x38, 0xDA, 0xE1, 0x41, 0x00, 0x00, 0x60, 0xC0, 0x8D, 0xFA,
 };
 
 constexpr std::uint8_t LEGACY_FRAME[] {
-    0xA5, 0x08, 0x00, 0x67, 0xE1, 0x7A, 0x14, 0x3F, 0x00, 0x00, 0x20, 0xC0, 0x29, 0xB6,
+    0xA5, 0x08, 0x00, 0x67, 0x1C, 0xED, 0x04, 0x42, 0x00, 0x00, 0x20, 0xC0, 0x94, 0x90,
 };
 
 /** @brief 管理仅用于测试的伪终端两端。 */
@@ -183,12 +183,13 @@ std::vector<std::uint8_t> read_bytes(int fd, std::size_t count) {
 }
 
 /**
- * @brief 生成单次发送 pitch（弧度）和 yaw（度）测试浮点数的参数。
+ * @brief 生成单次发送 pitch 和 yaw 绝对角度数的测试参数，不做角度换算。
  * @param port 伪终端从端设备路径。
  * @return 供验证工具使用的参数序列。
+ * @note pitch 为当前标定下的水平绝对角；探针直接发送参数原始值。
  */
 std::vector<std::string> send_args(const std::string& port) {
-    return { "--port", port, "--baud", "921600", "--values", "0.58", "-2.5" };
+    return { "--port", port, "--baud", "921600", "--values", "33.231552", "-2.5" };
 }
 
 TEST(SerialProbe, SendsDefaultWireUnitsAndDoesNotClaimDelivery) {
@@ -206,7 +207,7 @@ TEST(SerialProbe, SendsDefaultWireUnitsAndDoesNotClaimDelivery) {
     );
     EXPECT_EQ(exit_code, 0) << output;
     EXPECT_NE(output.find("TX_FRAME (14 bytes)"), std::string::npos) << output;
-    EXPECT_NE(output.find("PITCH_RAD=0.58 YAW_DEG=-2.5"), std::string::npos) << output;
+    EXPECT_NE(output.find("PITCH_DEG=33.2316 YAW_DEG=-2.5"), std::string::npos) << output;
     EXPECT_NE(output.find("CRC_PROFILE=crc8_31_modbus"), std::string::npos) << output;
     EXPECT_NE(output.find("TX_WRITTEN"), std::string::npos) << output;
     EXPECT_NE(output.find("DELIVERY_UNCONFIRMED"), std::string::npos) << output;
@@ -372,7 +373,9 @@ TEST(SerialProbe, RejectsThreeValuesBeforeOpeningPort) {
     termios before {};
     ASSERT_EQ(tcgetattr(pty.slave_fd(), &before), 0);
     ProbeProcess process;
-    ASSERT_TRUE(process.start({ "--port", pty.port_path(), "--values", "0.58", "-2.5", "3.25" }));
+    ASSERT_TRUE(process.start(
+        { "--port", pty.port_path(), "--values", "33.231552", "-2.5", "3.25" }
+    ));
 
     std::string output;
     EXPECT_EQ(process.finish(2000, output), 1) << output;

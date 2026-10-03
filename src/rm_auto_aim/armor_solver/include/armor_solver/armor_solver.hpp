@@ -245,6 +245,7 @@ private:
     double predict2send_delay_;
     double controller_delay_;
     double additional_prediction_time;
+    double vertical_prediction_gain_ = 1.0; // 竖直速度提前比例，0 仅跟随当前高度，1 完整提前。
 
     double shooting_range_w_;
     double shooting_range_h_;

@@ -33,7 +33,7 @@ struct Options {
     bool expect_echo = false;
     bool dry_run = false;
     bool help = false;
-    std::vector<float> values { 0.58F, -2.5F };
+    std::vector<float> values { 33.231552F, -2.5F };
 };
 
 /**
@@ -110,7 +110,7 @@ Options parse_options(int argc, char** argv) {
                 options.values.push_back(parsed);
             }
             if (options.values.size() != 2) {
-                throw std::invalid_argument("--values 需要恰好 2 个有限浮点数：PITCH_RAD YAW_DEG");
+                throw std::invalid_argument("--values 需要恰好 2 个有限浮点数：PITCH_DEG YAW_DEG");
             }
         } else if (argument == "--port" || argument == "--baud" || argument == "--count" || argument == "--interval-ms" || argument == "--timeout-ms" || argument == "--crc-profile")
         {
@@ -148,7 +148,7 @@ void print_help() {
                  "  --port DEVICE       串口设备，默认 /dev/ttyACM0\n"
                  "  --baud RATE         波特率，默认 921600，固定 8N1、无流控\n"
                  "  --crc-profile NAME  crc8_31_modbus（默认）或 robomaster\n"
-                 "  --values PITCH_RAD YAW_DEG  原样发送两个 float，默认 0.58 rad（水平） -2.5 deg\n"
+                 "  --values PITCH_DEG YAW_DEG  原样发送两个 float，默认 33.231552 deg（水平） -2.5 deg\n"
                  "  --count N           发送次数，默认 1，最大 10000\n"
                  "  --interval-ms MS    两次发送的最小间隔，默认 1000\n"
                  "  --timeout-ms MS     每次发送后等待接收的时限，默认 1000\n"
@@ -358,7 +358,7 @@ int main(int argc, char** argv) {
         }
         const auto frame = FloatFrame::encode(options.values, options.crc_profile);
         std::cout << "PORT=" << options.port << " BAUD=" << options.baud << " 8N1\n"
-                  << "PITCH_RAD=" << options.values[0] << " YAW_DEG=" << options.values[1];
+                  << "PITCH_DEG=" << options.values[0] << " YAW_DEG=" << options.values[1];
         if (options.crc_profile == CrcProfile::CRC8_31_MODBUS) {
             std::cout << "\nCRC_PROFILE=crc8_31_modbus\n"
                       << "CRC8 init=00 poly=31 (不反射); CRC16 init=FFFF poly=A001 (反射)\n";

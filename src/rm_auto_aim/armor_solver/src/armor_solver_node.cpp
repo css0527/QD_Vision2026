@@ -18,9 +18,15 @@
 
 #include "armor_solver/armor_solver_node.hpp"
 
+#include <algorithm>
+#include <cmath>
+#include <stdexcept>
+
 #include <cv_bridge/cv_bridge.h>
 #include <image_transport/image_transport.hpp>
 #include <sensor_msgs/image_encodings.hpp>
+
+#include "armor_solver/armor_process_noise.hpp"
 
 namespace qd::auto_aim {
 namespace {
@@ -70,6 +76,10 @@ ArmorSolverNode::ArmorSolverNode(const rclcpp::NodeOptions& options):
     tracker_ = std::make_unique<Tracker>(max_match_distance, max_match_yaw_diff);
     tracker_->tracking_thres = this->declare_parameter("tracker.tracking_thres", 5);
     lost_time_thres_ = this->declare_parameter("tracker.lost_time_thres", 0.3);
+    target_command_timeout_s_ = this->declare_parameter("tracker.target_command_timeout_s", 0.15);
+    if (!std::isfinite(target_command_timeout_s_) || target_command_timeout_s_ <= 0.0) {
+        throw std::invalid_argument("tracker.target_command_timeout_s must be finite and positive");
+    }
     filter_reset_dt_thres_ = this->declare_parameter("tracker.filter_reset_dt_thres", 1.0);
 
     // tf2 relevant
@@ -198,9 +208,25 @@ void ArmorSolverNode::timerCallback() {
         return;
     }
 
-    if (armor_target_.tracking) {
+    const rclcpp::Time solve_start_time = this->now();
+    const double target_age = (solve_start_time - armor_target_.header.stamp).seconds();
+    const bool target_fresh =
+        target_age >= 0.0 && target_age <= std::min(lost_time_thres_, target_command_timeout_s_);
+    // 短时丢失仍更新内部预测以便重捕，但不把无观测的外推角反复下发给云台。
+    const bool target_observed = tracker_->tracker_state == TrackerState::TRACKING;
+    if (armor_target_.tracking && !target_fresh) {
+        RCLCPP_WARN_THROTTLE(
+            this->get_logger(),
+            *this->get_clock(),
+            1000,
+            "Skipping stale target: age=%.3f s, timeout=%.3f s",
+            target_age,
+            std::min(lost_time_thres_, target_command_timeout_s_)
+        );
+    }
+    // 图像或 TF 中断时停止沿旧速度无限外推，保留无目标指令的 distance=-1。
+    if (armor_target_.tracking && target_fresh && target_observed) {
         try {
-            rclcpp::Time solve_start_time = this->now();
             FYT_DEBUG(
                 "armor_solver",
                 "Latency(img to predict): {:.2f} ms",
@@ -215,6 +241,28 @@ void ArmorSolverNode::timerCallback() {
             );
 
             control_msg.header.stamp = solve_start_time;
+
+            if (debug_mode_) {
+                const auto& position = armor_target_.position_armor;
+                RCLCPP_INFO_THROTTLE(
+                    this->get_logger(),
+                    *this->get_clock(),
+                    1000,
+                    "AIM id=%s state=%d top=%d age_ms=%.1f observed_pitch_deg=%.2f "
+                    "armor_pitch_deg=%.2f cmd_pitch_deg=%.2f pitch_error_deg=%.2f "
+                    "z_m=%.3f vz_mps=%.3f",
+                    armor_target_.id.c_str(),
+                    static_cast<int>(tracker_->tracker_state),
+                    armor_target_.top_level,
+                    target_age * 1000.0,
+                    tracker_->measurement(1) * 180.0 / M_PI,
+                    std::atan2(position.z, std::hypot(position.x, position.y)) * 180.0 / M_PI,
+                    control_msg.pitch,
+                    control_msg.pitch_diff,
+                    position.z,
+                    armor_target_.velocity_armor.z
+                );
+            }
 
         } catch (...) {
             FYT_ERROR("armor_solver", "Something went wrong in solver!");
@@ -384,9 +432,8 @@ void ArmorSolverNode::init_ArmorStateEKF() {
     auto h_xyz = EkfMeasure();
 
     auto u_q_xyz = [this]() {
-        Eigen::Matrix<double, X_N_, X_N_> q = Eigen::Matrix<double, X_N_, X_N_>::Zero();
-        q.diagonal() << q_armor_x_, q_armor_v_, q_armor_x_, q_armor_v_, q_armor_x_, q_armor_v_;
-        return q;
+        // q_x 为位置随机游走谱密度，q_v 为白加速度谱密度，均按秒积分。
+        return make_armor_process_noise(dt_, q_armor_x_, q_armor_v_);
     };
 
     auto u_r_xyz = [this](const Eigen::Matrix<double, Z_N_, 1>& z) {
@@ -613,6 +660,28 @@ bool ArmorSolverNode::processArmors(
             // 加 0.01s 等待 tf ，服务通信过来时太快，tf 还没准备好，导致帧率砍半
             armor.pose = tf2_buffer_->transform(ps, target_frame_, tf2::durationFromSec(0.01)).pose;
 
+            if (debug_mode_ && armor.number == tracker_->tracked_id) {
+                const auto& camera_point = ps.pose.position;
+                const auto& world_point = armor.pose.position;
+                // optical 的 y 向下；记录坐标变换前后的仰角以区分图像偏差和外参偏差。
+                RCLCPP_INFO_THROTTLE(
+                    this->get_logger(),
+                    *this->get_clock(),
+                    1000,
+                    "OBS id=%s frame=%s optical_pitch_deg=%.2f odom_pitch_deg=%.2f "
+                    "optical_xyz_m=[%.3f, %.3f, %.3f]",
+                    armor.number.c_str(),
+                    source_header.frame_id.c_str(),
+                    std::atan2(-camera_point.y, std::hypot(camera_point.x, camera_point.z))
+                        * 180.0 / M_PI,
+                    std::atan2(world_point.z, std::hypot(world_point.x, world_point.y))
+                        * 180.0 / M_PI,
+                    camera_point.x,
+                    camera_point.y,
+                    camera_point.z
+                );
+            }
+
             //听其他队伍会把前哨识别成哨兵，这里加保险
             if (armor.pose.position.z > 0.5 && armor.number == "sentry") {
                 armor.number = "outpost";
@@ -661,6 +730,10 @@ bool ArmorSolverNode::processArmors(
     } else {
         //更新predictEKF的dt
         dt_ = (time - last_time_).seconds();
+        if (dt_ <= 0.0) {
+            // 重复或乱序图像不推进滤波，避免负过程噪声及丢失阈值除零。
+            return false;
+        }
 
         if (dt_ > filter_reset_dt_thres_) {
             FYT_WARN(

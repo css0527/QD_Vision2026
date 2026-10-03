@@ -29,6 +29,7 @@
 * `tracker.tracking_thres` (`int`, default: 2) - `DETECTING` 状态进入 `TRACKING` 状态需要连续识别到的帧数
 * `tracker.lost_thres` (`double`, default: 1.0) - `TRACKING` 状态进入 `LOST` 状态需要连续丢失的时间（s）
 * `solver.prediction_delay` (`double`, default: 0.0) - 预测延迟时间（s），会影响选版
+* `solver.vertical_prediction_gain` (`double`, default: 1.0) - 竖直速度预测增益，限制在 [0,1]；当前跟随配置为 0.0
 * `solver.controller_delay` (`double`, default: 0.0) - 控制延迟时间（s），不会影响选版
 * `solver.max_tracking_v_yaw` (`double`, default: 60.0) - 转速大于这个值时，瞄准中心
 * `solver.side_angle` (`double`, default: 15.0) - 跳转到下一装甲板的角度阈值,越大越容易切板
@@ -37,6 +38,27 @@
 * `solver.gravity` (`double`, default: 9.8) - 重力加速度
 * `solver.compensator_type` (`string`, default: "ideal") - 补偿器类型，可选 `ideal` / `resistance` / `ceres`
 * `solver.resistance` (`double`, default: 0.001) - 空气阻力
+
+### 俯仰偏差与丢失诊断
+
+`debug: true` 时，每秒最多打印一条 `OBS` 和一条 `AIM`：
+
+* `OBS optical_pitch_deg`：原始相机观测相对光轴的仰角，画面上方为正。
+* `OBS odom_pitch_deg` / `AIM observed_pitch_deg`：经过云台反馈姿态和相机外参变换后的观测仰角。
+* `AIM armor_pitch_deg`、`z_m`、`vz_mps`：平移模型的滤波仰角、高度和竖直速度；`top=0` 且 `solver.use_armor_top=true` 时使用该模型。
+* `AIM cmd_pitch_deg`、`pitch_error_deg`：预测及补偿后的指令仰角、相对当前云台仰角的误差。
+* `AIM state`：0 丢失、1 确认中、2 跟踪、3 短时丢失。短时丢失期间的观测角保留最后一次观测，滤波状态继续预测。
+* `AIM age_ms`：当前状态的图像时间戳到解算时刻的间隔。
+
+若 `optical_pitch_deg` 接近 0，而变换后的观测持续明显偏低，应核对电控上报的是编码器/IMU 实测姿态，以及 `launch_params.yaml` 的相机安装外参。电控目标角表示希望到达的位置，不能代替实际姿态用于 TF，否则云台尚未转到位时视觉会继续叠加错误补偿。
+
+相机尚未标定，`launch_params.yaml` 目前以零外参作为调试初值，暂不补偿安装偏移。旧的 `pitch=+0.091 rad`、`z=-0.0603874 m` 分别表示镜头下倾 5.21°、光心在云台原点下方约 6 cm；这组值没有当前设备的实测依据，已移除。实际相机位于枪管上方，但壳体间隙不能作为相机光心到 `gimbal_link` 原点的精确平移。确认电控上报实测姿态后，测量并填写 xyz（米）与 rpy（弧度）：z 向上为正、pitch 向下倾为正。零初值不保证实际光轴平行或瞄准精度。
+
+平移模型的 `ekf.armor_model.q_x`、`q_v` 分别为位置随机游走谱密度（m²/s）、白加速度谱密度（m²/s³），按真实帧间隔积分。旧版每帧固定加入速度方差，会把定位抖动放大为竖直速度和提前瞄准角。
+
+`additional_prediction_time: 0` 仍保留图像年龄和弹丸飞行时间对应的运动预测。当前 `solver.vertical_prediction_gain: 0.0` 关闭竖直速度在这条路径及角速度提前中的贡献，避免静止目标的高度测量噪声变成上下提前量；实时高度位置、水平运动预测和弹道重力补偿仍生效。该配置减少快速竖直运动的提前瞄准，恢复完整竖直速度预测可设为 1.0。
+
+`TEMP_LOST` 期间内部滤波继续预测以便重捕，但不再下发缺少观测的外推角。若图像或 TF 中断，目标状态年龄超过 `tracker.target_command_timeout_s`（默认 0.15 s，且不超过 `tracker.lost_time_thres`），解算器发布 `distance=-1`、禁止开火的无目标消息。串口短时保持原角，超过 `idle_return.command_timeout_s`（默认 0.15 s）后平滑回水平并保持当前 yaw；单次漏检通常约 0.15 s 后开始回中，整路图像中断通常约 0.30 s 后开始回中。启动尚未有目标时，串口独立定时器在有效反馈到达后也会回水平，无需等解算器初始化。水平由串口的 `pitch_horizontal_rad` 定义（当前 0.58 rad）；串口反馈过期时停发。
 
 
 ## ArmorSolverNode

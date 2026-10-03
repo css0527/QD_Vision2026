@@ -79,11 +79,11 @@ void VisionSetFlag(Enemy_Color_e enemy_color, Work_Mode_e work_mode, Bullet_Spee
     send_data.bullet_speed = bullet_speed;
 }
 
-void VisionSetAltitude(float yaw, float pitch, float roll)
+void VisionSetAltitude(float measured_yaw_deg, float measured_pitch_rad, float measured_roll_deg)
 {
-    send_data.yaw = yaw;
-    send_data.pitch = pitch;
-    send_data.roll = roll;
+    send_data.yaw = measured_yaw_deg;
+    send_data.pitch = measured_pitch_rad;
+    send_data.roll = measured_roll_deg;
 }
 
 /**

@@ -43,8 +43,8 @@ typedef struct
 	Target_State_e target_state;
 	Target_Type_e target_type;
 
-	float pitch;
-	float yaw;
+	float pitch; // 电机绝对目标角，单位：度；电控执行前转换为弧度
+	float yaw;   // 绝对目标角，单位：度；与 small_yaw 使用相同参考系
 //	float vel_x;
 //	float vel_y;
 //	float angle;//vel_yaw
@@ -82,9 +82,9 @@ typedef struct
 	Work_Mode_e work_mode;
 	Bullet_Speed_e bullet_speed;
 
-	float yaw;
-	float pitch;
-	float roll;
+	float yaw;   // 实测绝对 yaw，单位：度；与下行 yaw 使用相同参考系
+	float pitch; // 实测电机绝对 pitch，单位：弧度；抬头时减小
+	float roll;  // 实测 roll，单位：度
 
 	float control_id;
 	float game_progress;
@@ -127,11 +127,13 @@ void VisionSend();
 void VisionSetFlag(Enemy_Color_e enemy_color, Work_Mode_e work_mode, Bullet_Speed_e bullet_speed);
 
 /**
- * @brief 设置发送数据的姿态部分
- *
- * @param yaw
- * @param pitch
+ * @brief 更新向视觉上报的云台实测姿态。
+ * @param measured_yaw_deg 电机或 IMU 实测的绝对 yaw，单位为度，参考系与下行 yaw 一致。
+ * @param measured_pitch_rad 电机实测的绝对 pitch，单位为弧度，当前机构抬头时数值减小。
+ * @param measured_roll_deg IMU 实测的 roll，单位为度。
+ * @note 调用者须传入新鲜的反馈值，不能传入 gimbal_cmd_send 等目标角或视觉指令回显。
+ *       本函数仅保存输入，不做单位转换或数据来源校验；随后调用 VisionSend() 才会发送。
  */
-void VisionSetAltitude(float yaw, float pitch, float roll);
+void VisionSetAltitude(float measured_yaw_deg, float measured_pitch_rad, float measured_roll_deg);
 
 #endif // !MASTER_PROCESS_H

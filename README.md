@@ -128,6 +128,16 @@ ros2 launch rm_bringup bringup_SingleProcess.launch.py
 
 默认日志和内录视频路径为`qd2026-log/`
 
+### 云台角度与相机外参
+
+视觉发给电控的是绝对目标角，`pitch`、`yaw` 均为度；电控执行 `pitch * DEG_TO_RAD` 后作为目标。电控回传视觉的必须是当前实测姿态：`yaw` 为度、`pitch` 为电机绝对角弧度，不能回传 `gimbal_cmd_send` 中的目标值。调用约定见 [电控通信说明](diankongSerial/master_process.md)。
+
+串口已默认启用平滑跟随：首次识别从最新反馈角起步，再逐步到达目标；俯仰限速 12°/秒、偏航限速 60°/秒，低通时间常数 0.18 秒，俯仰死区 0.25°。参数在 [serial_driver_params.yaml](src/rm_bringup/config/node_params/serial_driver_params.yaml) 的 `follow` 中。平移滤波过程噪声按帧间隔积分；[armor_solver_params.yaml](src/rm_bringup/config/node_params/armor_solver_params.yaml) 的 `solver.vertical_prediction_gain: 0.0` 进一步关闭竖直速度提前，避免静止目标测量抖动引起点头，真实高度变化仍按位置跟随。此配置减少快速竖直运动的提前瞄准。平滑不改变方向，也不能替代真实姿态反馈。修改后须同时编译 `armor_solver`、`rm_serial_driver` 和 `rm_bringup`，再 source 当前工作区；启动应出现 `Follow smoothing`，识别时应出现 `OBS/AIM` 日志。
+
+默认 `idle_return.enabled: true`：启动收到实测反馈后平滑回水平；持续丢失目标或解算指令超过 0.15 秒未更新时也回水平，yaw 保持进入回中时的实测角。单次短掉帧先保持原角，避免反复回中与重捕。水平位置由 `pitch_horizontal_rad` 定义，当前为 `0.58 rad`；对应下行约 `33.2316°`，不能直接发送 `pitch=0`。相机整路中断时，解算器最多继续使用旧帧 0.15 秒，因此通常约 0.30 秒后开始回中。串口姿态反馈中断时停止发送，直到新鲜反馈恢复。
+
+当前相机尚未标定，[launch_params.yaml](src/rm_bringup/config/launch_params.yaml) 中的相机 xyz/rpy 已设为零补偿调试初值，需按实际安装测量后填写。xyz 是光心相对 `gimbal_link` 原点的位置（米），z 向上为正；rpy 单位为弧度，pitch 向下倾为正。相机在枪管上方的间隙不能直接当作光心到云台俯仰轴的距离，也不能据此确定俯仰夹角。仅修改外参不能解决将目标角当作实测角回传的问题。
+
 ## 四、自启动
 
 ### Docker

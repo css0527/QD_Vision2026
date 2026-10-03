@@ -118,6 +118,7 @@ private:
     double r_armor_yaw_, r_armor_pitch_, r_armor_dis_;
 
     double lost_time_thres_;
+    double target_command_timeout_s_;
     std::unique_ptr<Tracker> tracker_;
 
     // Armor Solver

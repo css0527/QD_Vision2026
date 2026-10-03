@@ -38,6 +38,8 @@ public:
      * @param enable_data_print 是否打印收发角度。
      * @param crc_profile 收发双方约定的 CRC 算法组合。
      * @param pitch_calibration 电控 pitch 的水平零位、方向和绝对角限位。
+     * @param smoothing 绝对目标角的平滑和实测反馈有效期配置。
+     * @param idle_return 启动或指令中断后的水平回中配置。
      * @return 对应的协议实例；不支持的机器人类型返回空指针。
      */
     static std::unique_ptr<protocol::Protocol> createProtocol(
@@ -46,7 +48,9 @@ public:
         int speed,
         bool enable_data_print,
         CrcProfile crc_profile = CrcProfile::ROBOMASTER,
-        protocol::PitchCalibration pitch_calibration = {}
+        protocol::PitchCalibration pitch_calibration = {},
+        protocol::GimbalCommandSmoother::Config smoothing = {},
+        protocol::IdleReturnConfig idle_return = {}
     ) {
         if (protocol_type == "infantry" || protocol_type == "hero" || protocol_type == "air"
             || protocol_type == "sentry" || protocol_type == "seasky")
@@ -57,7 +61,9 @@ public:
                 speed,
                 enable_data_print,
                 crc_profile,
-                pitch_calibration
+                pitch_calibration,
+                smoothing,
+                idle_return
             );
         }
         return nullptr;

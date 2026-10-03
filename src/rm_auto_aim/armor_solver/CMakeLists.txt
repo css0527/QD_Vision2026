@@ -48,7 +48,15 @@ if(BUILD_TESTING)
   )
   ament_lint_auto_find_test_dependencies()
 
-  find_package(ament_cmake_gtest)
+  find_package(ament_cmake_gtest REQUIRED)
+  ament_add_gtest(test_tracker_prediction test/test_tracker_prediction.cpp)
+  target_link_libraries(test_tracker_prediction ${PROJECT_NAME})
+  ament_add_gtest(test_target_timeout test/test_target_timeout.cpp)
+  target_link_libraries(test_target_timeout ${PROJECT_NAME})
+  ament_add_gtest(test_armor_process_noise test/test_armor_process_noise.cpp)
+  target_link_libraries(test_armor_process_noise ${PROJECT_NAME})
+  ament_add_gtest(test_vertical_prediction test/test_vertical_prediction.cpp)
+  target_link_libraries(test_vertical_prediction ${PROJECT_NAME})
 
 endif()
 

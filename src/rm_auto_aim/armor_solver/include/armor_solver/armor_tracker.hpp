@@ -58,8 +58,17 @@ public:
     using Armors = rm_interfaces::msg::Armors;
     using Armor = rm_interfaces::msg::Armor;
 
+    /**
+     * @brief 从当前观测初始化目标状态并清空连续检测与丢失计数。
+     * @param armors_msg 同一帧内已转换到跟踪坐标系的观测；空帧保持原状态。
+     */
     void init(const Armors::SharedPtr& armors_msg) noexcept;
 
+    /**
+     * @brief 将两个运动模型推进到本帧时间，并用匹配观测修正状态。
+     * @param armors_msg 当前帧的观测，允许为空或不含正在跟踪的编号。
+     * @note 调用前须初始化跟踪器，并为两个 EKF 设置本帧的预测时间间隔。
+     */
     void update(const Armors::SharedPtr& armors_msg) noexcept;
 
     TrackerState tracker_state;
@@ -87,6 +96,10 @@ public:
 private:
     void initEKF(const Armor& a) noexcept;
 
+    /**
+     * @brief 预测本帧的平移状态，并用匹配到的装甲板观测更新滤波器。
+     * @param armors_msg 当前帧观测，缺少同编号装甲板时保留预测状态。
+     */
     void updateArmorStateEKF(const Armors::SharedPtr& armors_msg) noexcept;
 
     void computeArmorParams() noexcept;

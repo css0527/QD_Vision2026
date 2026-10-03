@@ -48,6 +48,8 @@ void Tracker::init(const Armors::SharedPtr& armors_msg) noexcept {
     }
 
     initEKF(tracked_armor);
+    detect_count_ = 0;
+    lost_count_ = 0;
     FYT_INFO("armor_solver", "Init EKF!");
 
     tracked_id = tracked_armor.number;
@@ -67,17 +69,11 @@ void Tracker::init(const Armors::SharedPtr& armors_msg) noexcept {
 }
 
 void Tracker::update(const Armors::SharedPtr& armors_msg) noexcept {
-    if (armors_msg->armors.empty()) {
-        updateTracker(false);
-        return;
-    }
-
     utils::AutoTimer timer("armor_solver", "Tracker::update");
     updateArmorStateEKF(armors_msg);
 
-    // EKF predict
-    Eigen::VectorXd ekf_prediction = ekf->predict();
-    target_state = ekf_prediction;
+    // 即使本帧没有观测，也要把状态推进到本帧时间。
+    target_state = ekf->predict();
 
     int armors_num_int = static_cast<int>(tracked_armors_num);
 
@@ -152,6 +148,8 @@ void Tracker::update(const Armors::SharedPtr& armors_msg) noexcept {
 
     updateTracker(matched);
     if (!matched) {
+        choose_yaw_diff = DBL_MAX;
+        computeArmorParams();
         return;
     }
 
@@ -252,12 +250,9 @@ void Tracker::computeArmorParams() noexcept {
 
 // 平移运动模型更新
 void Tracker::updateArmorStateEKF(const Armors::SharedPtr& armors_msg) noexcept {
-    if (armors_msg->armors.empty()) {
-        return;
-    }
-    Eigen::VectorXd ekf_prediction = ekf_point->predict();
-    auto predicted_position =
-        Eigen::Vector3d(ekf_prediction(0), ekf_prediction(2), ekf_prediction(4));
+    // 空帧或只有其他编号时，仍发布当前帧的预测状态。
+    armor_state = ekf_point->predict();
+    auto predicted_position = Eigen::Vector3d(armor_state(0), armor_state(2), armor_state(4));
 
     bool matched = false;
     double min_distance = DBL_MAX;

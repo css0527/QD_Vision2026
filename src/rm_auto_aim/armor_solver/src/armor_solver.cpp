@@ -29,6 +29,8 @@ Solver::Solver(std::weak_ptr<rclcpp::Node> n): node_(n) {
     predict2send_delay_ = node->declare_parameter("solver.predict2send_delay", 0.0);
     controller_delay_ = node->declare_parameter("solver.controller_delay", 0.0);
     additional_prediction_time = node->declare_parameter("solver.additional_prediction_time", 0.0);
+    vertical_prediction_gain_ =
+        std::clamp(node->declare_parameter("solver.vertical_prediction_gain", 1.0), 0.0, 1.0);
     // 弹速
     bullet_speed = node->declare_parameter("solver.bullet_speed", 20.0); // 重力
     bullet_speed_filter_alpha_ =
@@ -115,6 +117,8 @@ rm_interfaces::msg::GimbalCmd Solver::solve(
             1.0
         );
         use_armor_top_ = node->get_parameter("solver.use_armor_top").as_bool();
+        vertical_prediction_gain_ =
+            std::clamp(node->get_parameter("solver.vertical_prediction_gain").as_double(), 0.0, 1.0);
         gimble_frame_ = node->get_parameter("gimble_frame").as_string();
         node.reset();
 
@@ -148,7 +152,7 @@ rm_interfaces::msg::GimbalCmd Solver::solve(
     if (target.id == "outpost") {
         pitch_inclined_ = -15.0 * M_PI / 180.0; // 前哨战固定15度
     } else {
-        pitch_inclined_ = 15.0 * M_PI / 180.0;
+        pitch_inclined_ = 0.0* M_PI / 180.0;
     }
 
     // 根据top_level选择决策
@@ -301,6 +305,7 @@ std::vector<State> Solver::get_armors_state(const RosTarget& target_msg) {
     auto v_yaw = target_msg.v_yaw_;
     auto c_pos = target_msg.center_position_;
     auto c_vel = target_msg.center_velocity_;
+    c_vel.z() *= vertical_prediction_gain_;
     // auto zc = c_pos.z();
 
     auto armors_num = target_msg.armors_num_;
@@ -384,6 +389,8 @@ ShootState Solver::get_aim_positon(const RosTarget& target_msg, const Eigen::Vec
     // 预测dt后装甲板state
     Eigen::Vector3d p = target_msg.armor_position_;
     auto p_v = target_msg.armor_velocity_;
+    // 静止目标的高度噪声不能被当成竖直运动，再按图像延迟和飞行时间放大。
+    p_v.z() *= vertical_prediction_gain_;
     const State armor_state { p.x(), p_v.x(), p.y(), p_v.y(), p.z(), p_v.z(), 0, 0, 0 };
     const State pre_state =
         solve_impact_state(armor_state, prediction_delay_ + predict2send_delay_);

@@ -54,10 +54,27 @@ void SerialDriverNode::init() {
     pitch_calibration.up_sign = this->declare_parameter("pitch_up_sign", -1.0);
     pitch_calibration.min_rad = this->declare_parameter("pitch_min_rad", 0.4);
     pitch_calibration.max_rad = this->declare_parameter("pitch_max_rad", 0.75);
+    protocol::GimbalCommandSmoother::Config smoothing;
+    smoothing.enabled = this->declare_parameter("follow.enabled", true);
+    smoothing.time_constant_s = this->declare_parameter("follow.time_constant_s", 0.18);
+    smoothing.pitch_rate_deg_s = this->declare_parameter("follow.pitch_rate_deg_s", 12.0);
+    smoothing.yaw_rate_deg_s = this->declare_parameter("follow.yaw_rate_deg_s", 60.0);
+    smoothing.feedback_timeout_s = this->declare_parameter("follow.feedback_timeout_s", 0.30);
+    smoothing.pitch_deadband_deg = this->declare_parameter("follow.pitch_deadband_deg", 0.25);
+    protocol::IdleReturnConfig idle_return;
+    idle_return.enabled = this->declare_parameter("idle_return.enabled", true);
+    idle_return.command_timeout_s = this->declare_parameter("idle_return.command_timeout_s", 0.15);
     try {
         const auto crc_profile = FloatFrame::parse_crc_profile(crc_profile_name);
         protocol_ = ProtocolFactory::createProtocol(
-            protocol_type, port_name, baud_rate, enable_data_print, crc_profile, pitch_calibration
+            protocol_type,
+            port_name,
+            baud_rate,
+            enable_data_print,
+            crc_profile,
+            pitch_calibration,
+            smoothing,
+            idle_return
         );
     } catch (const std::invalid_argument& error) {
         FYT_FATAL("serial_driver", "{}", error.what());
@@ -80,11 +97,31 @@ void SerialDriverNode::init() {
 
     FYT_INFO(
         "serial_driver",
+        "Idle return: enabled={}, horizontal={} rad, command_timeout={} s, yaw=hold measured",
+        idle_return.enabled,
+        pitch_calibration.horizontal_rad,
+        idle_return.command_timeout_s
+    );
+
+    FYT_INFO(
+        "serial_driver",
         "Pitch calibration: horizontal={} rad, up_sign={}, limits=[{}, {}] rad",
         pitch_calibration.horizontal_rad,
         pitch_calibration.up_sign,
         pitch_calibration.min_rad,
         pitch_calibration.max_rad
+    );
+
+    FYT_INFO(
+        "serial_driver",
+        "Follow smoothing: enabled={}, tau={} s, pitch={} deg/s, yaw={} deg/s, "
+        "feedback_timeout={} s, pitch_deadband={} deg",
+        smoothing.enabled,
+        smoothing.time_constant_s,
+        smoothing.pitch_rate_deg_s,
+        smoothing.yaw_rate_deg_s,
+        smoothing.feedback_timeout_s,
+        smoothing.pitch_deadband_deg
     );
 
     // Subscriptions
@@ -160,10 +197,10 @@ void SerialDriverNode::listenLoop() {
                     static_cast<int64_t>(sync_time_sec * 1e9),
                     pc_now.get_clock_type()
                 );
-
-                timestamp_offset_ = this->get_parameter("timestamp_offset").as_double();
-                real_gimbal_time += rclcpp::Duration::from_seconds(timestamp_offset_);
             }
+            // 两 float 帧没有 MCU 时间戳，也须应用实测的反馈延迟补偿。
+            timestamp_offset_ = this->get_parameter("timestamp_offset").as_double();
+            real_gimbal_time += rclcpp::Duration::from_seconds(timestamp_offset_);
 
             FYT_DEBUG(
                 "serial_driver",

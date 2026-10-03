@@ -69,6 +69,12 @@ if(BUILD_TESTING)
   ament_add_gtest(test_seasky_protocol test/test_seasky_protocol.cpp)
   target_link_libraries(test_seasky_protocol ${PROJECT_NAME})
 
+  ament_add_gtest(test_idle_return test/test_idle_return.cpp)
+  target_link_libraries(test_idle_return ${PROJECT_NAME})
+
+  ament_add_gtest(test_gimbal_command_smoother test/test_gimbal_command_smoother.cpp)
+  target_include_directories(test_gimbal_command_smoother PRIVATE include)
+
   ament_add_gtest(test_serial_probe test/test_serial_probe.cpp)
   set_tests_properties(test_serial_probe PROPERTIES
     ENVIRONMENT "SERIAL_PROBE_EXE=$<TARGET_FILE:serial_probe>"

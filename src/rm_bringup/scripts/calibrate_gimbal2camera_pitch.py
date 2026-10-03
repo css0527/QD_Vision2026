@@ -33,10 +33,11 @@ class Gimbal2CameraPitchCalibrator(Node):
         super().__init__('gimbal2camera_pitch_calibrator')
 
         self.declare_parameter('sample_duration', 30.0)
-        self.declare_parameter('gimbal2camera_x', 0.0461892)
+        # 默认与未标定的 launch_params.yaml 一致；独立运行时须传入当前外参与实测平移。
+        self.declare_parameter('gimbal2camera_x', 0.0)
         self.declare_parameter('gimbal2camera_y', 0.0)
-        self.declare_parameter('gimbal2camera_z', -0.0603874)
-        self.declare_parameter('gimbal2camera_pitch', 0.091)
+        self.declare_parameter('gimbal2camera_z', 0.0)
+        self.declare_parameter('gimbal2camera_pitch', 0.0)
         self.declare_parameter('pitch_min', -0.3)
         self.declare_parameter('pitch_max', 0.3)
         self.declare_parameter('pitch_step', 0.001)

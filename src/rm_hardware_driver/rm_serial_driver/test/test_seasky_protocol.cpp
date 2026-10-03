@@ -18,6 +18,7 @@
 #include "rm_serial_driver/float_frame.hpp"
 #include "rm_serial_driver/protocol/seasky_protocol.hpp"
 #include "rm_serial_driver/transporter_interface.hpp"
+#include "rm_utils/logger/log.hpp"
 
 namespace {
 
@@ -75,13 +76,14 @@ class SeaskyProtocolTest: public ::testing::Test {
 protected:
     static void SetUpTestSuite() {
         rclcpp::init(0, nullptr);
+        FYT_REGISTER_LOGGER("serial_driver", "/tmp/qd-seasky-test-logs", WARN);
     }
     static void TearDownTestSuite() {
         rclcpp::shutdown();
     }
 };
 
-TEST_F(SeaskyProtocolTest, sends_absolute_pitch_in_radians_and_yaw_in_degrees) {
+TEST_F(SeaskyProtocolTest, sends_absolute_pitch_and_yaw_in_degrees) {
     auto transporter = std::make_shared<TestTransporter>();
     qd::serial_driver::protocol::SeaskyProtocol protocol("hero", transporter, false);
     rm_interfaces::msg::GimbalCmd command;
@@ -98,16 +100,16 @@ TEST_F(SeaskyProtocolTest, sends_absolute_pitch_in_radians_and_yaw_in_degrees) {
                                      0x08,
                                      0x00,
                                      0x67,
-                                     0xE1,
-                                     0x7A,
-                                     0x14,
-                                     0x3F,
+                                     0x1C,
+                                     0xED,
+                                     0x04,
+                                     0x42,
                                      0x00,
                                      0x00,
                                      0x20,
                                      0xC0,
-                                     0x29,
-                                     0xB6 })
+                                     0x94,
+                                     0x90 })
     );
 }
 
@@ -163,16 +165,16 @@ TEST_F(SeaskyProtocolTest, uses_selected_crc_for_outgoing_pitch_yaw) {
                                      0x08,
                                      0x00,
                                      0xF4,
-                                     0xE1,
-                                     0x7A,
-                                     0x14,
-                                     0x3F,
+                                     0x1C,
+                                     0xED,
+                                     0x04,
+                                     0x42,
                                      0x00,
                                      0x00,
                                      0x20,
                                      0xC0,
-                                     0xED,
-                                     0xA9 })
+                                     0xAB,
+                                     0x27 })
     );
 }
 
@@ -224,7 +226,8 @@ TEST_F(SeaskyProtocolTest, preserves_upward_positive_pitch_through_tf_and_send) 
         std::vector<float> sent;
         ASSERT_TRUE(FloatFrame::decode(transporter->sent, sent, CrcProfile::CRC8_31_MODBUS));
         ASSERT_EQ(sent.size(), 2U);
-        EXPECT_NEAR(sent[0], pitch_rad, 1e-6F);
+        // 按电控的 DEG_TO_RAD 换算后，应回到上报的绝对角。
+        EXPECT_NEAR(sent[0] * M_PI / 180.0, pitch_rad, 1e-6);
         EXPECT_FLOAT_EQ(sent[1], 21.0F);
     }
 }
@@ -262,7 +265,7 @@ TEST_F(SeaskyProtocolTest, converts_commands_and_clamps_to_mechanical_limits) {
         std::vector<float> sent;
         ASSERT_TRUE(FloatFrame::decode(transporter->sent, sent, CrcProfile::CRC8_31_MODBUS));
         ASSERT_EQ(sent.size(), 2U);
-        EXPECT_FLOAT_EQ(sent[0], expected_rad);
+        EXPECT_NEAR(sent[0] * M_PI / 180.0, expected_rad, 1e-6);
         EXPECT_FLOAT_EQ(sent[1], 118.0F);
     }
 }
@@ -291,7 +294,7 @@ TEST_F(SeaskyProtocolTest, applies_custom_zero_direction_and_limits) {
     std::vector<float> sent;
     ASSERT_TRUE(FloatFrame::decode(transporter->sent, sent, CrcProfile::CRC8_31_MODBUS));
     ASSERT_EQ(sent.size(), 2U);
-    EXPECT_FLOAT_EQ(sent[0], 0.3F);
+    EXPECT_NEAR(sent[0] * M_PI / 180.0, 0.3, 1e-6);
     EXPECT_FLOAT_EQ(sent[1], 21.0F);
 }
 
@@ -316,6 +319,52 @@ TEST_F(SeaskyProtocolTest, rejects_invalid_calibration_before_opening_port) {
         );
         EXPECT_FALSE(transporter->isOpen());
     }
+}
+
+TEST_F(SeaskyProtocolTest, smooth_capture_sends_measured_angles_instead_of_target) {
+    using qd::serial_driver::CrcProfile;
+    using qd::serial_driver::FloatFrame;
+    using qd::serial_driver::protocol::GimbalCommandSmoother;
+    GimbalCommandSmoother::Config smoothing;
+    smoothing.enabled = true;
+    auto transporter = std::make_shared<TestTransporter>(
+        FloatFrame::encode({ 118.0F, 0.65F }, CrcProfile::CRC8_31_MODBUS)
+    );
+    qd::serial_driver::protocol::SeaskyProtocol
+        protocol("hero", transporter, false, CrcProfile::CRC8_31_MODBUS, {}, smoothing);
+    rm_interfaces::msg::SerialReceiveData feedback;
+    ASSERT_TRUE(protocol.receive(feedback));
+    rm_interfaces::msg::GimbalCmd command;
+    command.pitch = 10.0;
+    command.yaw = 90.0;
+    command.distance = 1.0;
+    protocol.send(command);
+    std::vector<float> sent;
+    ASSERT_TRUE(FloatFrame::decode(transporter->sent, sent, CrcProfile::CRC8_31_MODBUS));
+    ASSERT_EQ(sent.size(), 2U);
+    EXPECT_NEAR(sent[0] * M_PI / 180.0, 0.65, 1e-6);
+    EXPECT_FLOAT_EQ(sent[1], 118.0F);
+}
+
+TEST_F(SeaskyProtocolTest, smooth_follow_requires_feedback_before_sending) {
+    using qd::serial_driver::protocol::GimbalCommandSmoother;
+    GimbalCommandSmoother::Config smoothing;
+    smoothing.enabled = true;
+    auto transporter = std::make_shared<TestTransporter>();
+    qd::serial_driver::protocol::SeaskyProtocol protocol(
+        "hero",
+        transporter,
+        false,
+        qd::serial_driver::CrcProfile::CRC8_31_MODBUS,
+        {},
+        smoothing
+    );
+    rm_interfaces::msg::GimbalCmd command;
+    command.pitch = 10.0;
+    command.yaw = 90.0;
+    command.distance = 1.0;
+    protocol.send(command);
+    EXPECT_TRUE(transporter->sent.empty());
 }
 
 } // namespace
